@@ -6,8 +6,8 @@
 #include <ESP32Servo.h>
 #include "board_config.h"
 
-const char *ssid     = "WE_652DA4";
-const char *password = "n7j02656";
+const char *ssid     = "ssid";
+const char *password = "password";
 
 const int UDP_PORT  = 4210;
 const int SERVO_PIN = 26;
