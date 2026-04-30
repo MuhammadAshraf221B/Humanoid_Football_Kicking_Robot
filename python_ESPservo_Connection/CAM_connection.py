@@ -167,7 +167,7 @@ while True:
     cv2.putText(canvas, "ESC=quit",
                 (12, h-10), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 180), 1)
 
-    cv2.imshow("Ball Tracker (UDP → Arduino)", canvas)
+    cv2.imshow("Ball Tracker (UDP → A rduino)", canvas)
 
     if cv2.waitKey(1) & 0xFF == 27:
         break
