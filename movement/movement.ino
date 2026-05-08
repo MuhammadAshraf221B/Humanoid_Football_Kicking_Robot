@@ -176,7 +176,7 @@ void printCommands() {
   Serial.println("  w  → Move Forward");
   Serial.println("  r  → Turn Right");
   Serial.println("  l  → Turn Left");
-  Serial.println("  LL2/LL3/LL5/RL2/RL3/RL5 [angle] ");
+  Serial.println("  LL2/LL3/LL5/RL2/RL3/RL5 [angle]");
 }
 
 void setup() {
