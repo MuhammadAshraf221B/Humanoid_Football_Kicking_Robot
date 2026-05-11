@@ -13,9 +13,9 @@ MODEL_PATH    = "yolov8n.pt"
 BALL_CLASS    = [32] 
 CONF_THRESH   = 0.50
 
-# توقيتات الدورة المطلوبة
-WALK_DURATION = 5.0  # مدة إرسال w والانتظار
-IDLE_DURATION = 3.0  # مدة إرسال i والانتظار
+# توقيتات الدورة
+WALK_DURATION = 5.0  # مدة المشي
+IDLE_DURATION = 1.0  # مدة الثبات قبل الفحص التالي
 # ──────────────────────────────────────────────────────────────
 
 model = YOLO(MODEL_PATH)
@@ -30,60 +30,62 @@ except Exception as e:
     print(f"[ERROR] Serial Connection Failed: {e}")
     robot_ser = None
 
-# متغيرات الحالة "الذكية"
-cycle_state = "IDLE"  # الحالات: IDLE (انتظار), WALKING (مشي), STOPPING (توقف)
+# متغيرات الحالة
+cycle_state = "SEARCHING" 
 last_state_change = 0
 
-print("[INFO] Intelligent Cycle Ready. Searching for Ball...")
+print("[INFO] Intelligent Continuous Loop Active.")
 
 while True:
     ret, frame = cap.read()
     if not ret: break
 
+    # الكشف عن الكورة
     results = model.predict(frame, conf=CONF_THRESH, classes=BALL_CLASS, verbose=False)[0]
     target_detected = len(results.boxes) > 0
     now = time.time()
     canvas = frame.copy()
 
-    # --- منطق الدورة الذكية (The Smart State Machine) ---
-    
-    # 1. حالة الانتظار (IDLE): إذا رأى الكورة، يبدأ المشي فوراً
-    if cycle_state == "IDLE":
+    # --- منطق الدورة المستمرة ---
+
+    # 1. حالة البحث (أو انتظار الكورة)
+    if cycle_state == "SEARCHING":
         if target_detected:
             if robot_ser:
                 robot_ser.write(b"w\n")
-                print("[Cycle] → Sending 'w' (Walking for 5s)")
+                print("[Action] → Ball Found! Sending 'w' (Walking 5s)")
             cycle_state = "WALKING"
             last_state_change = now
 
-    # 2. حالة المشي (WALKING): ينتظر 5 ثوانٍ بغض النظر عن الـ Detection
+    # 2. حالة المشي (تجاهل التقطيع لمدة 5 ثوانٍ)
     elif cycle_state == "WALKING":
         if now - last_state_change >= WALK_DURATION:
             if robot_ser:
                 robot_ser.write(b"i\n")
-                print("[Cycle] → Sending 'i' (Initial Pos for 3s)")
-            cycle_state = "STOPPING"
+                print("[Action] → Time up. Sending 'i' (Resting 3s)")
+            cycle_state = "RESTING"
             last_state_change = now
 
-    # 3. حالة التوقف (STOPPING): ينتظر 3 ثوانٍ ثم يعود لطلب ديدكشن جديد
-    elif cycle_state == "STOPPING":
+    # 3. حالة الثبات (انتظار 3 ثوانٍ ثم العودة للبحث فوراً)
+    elif cycle_state == "RESTING":
         if now - last_state_change >= IDLE_DURATION:
-            print("[Cycle] → Cycle Complete. Looking for ball again...")
-            cycle_state = "IDLE"
+            # هنا الميزة: بمجرد انتهاء الوقت، نعود لحالة البحث 
+            # لو الكورة لسه موجودة، هيدخل في "WALKING" في اللفة اللي بعدها فوراً
+            cycle_state = "SEARCHING"
+            print("[System] → Ready to check for ball again...")
 
-    # --- الجزء المرئي وتتبع الرأس (UDP) يظل شغالاً دائماً ---
+    # --- عرض البيانات على الشاشة ---
+    status_color = (0, 255, 0) if target_detected else (0, 0, 255)
+    cv2.putText(canvas, f"Mode: {cycle_state}", (10, 30), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
+
     if target_detected:
         box = results.boxes[0]
         x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-        # إرسال الزوايا للرأس (اختياري، يجعله يتبع الكورة حتى وهو واقف)
-        cv2.rectangle(canvas, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(canvas, f"STATE: {cycle_state}", (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-    else:
-        cv2.putText(canvas, f"SEARCHING... (State: {cycle_state})", (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.rectangle(canvas, (x1, y1), (x2, y2), (255, 0, 0), 2)
 
-    cv2.imshow("Smart Cycle Tracker", canvas)
+    cv2.imshow("Continuous Tracker", canvas)
+    
     if cv2.waitKey(1) & 0xFF == 27: break
 
 cap.release()
