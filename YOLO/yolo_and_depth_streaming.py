@@ -12,7 +12,7 @@ midas.eval()
 transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
 transform = transforms.small_transform
 
-stream_url = "http://192.168.1.11:81/stream"
+stream_url = "http://10.185.117.220:81/stream"
 cap = cv2.VideoCapture(stream_url)
 
 if not cap.isOpened():

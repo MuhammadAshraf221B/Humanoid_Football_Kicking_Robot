@@ -7,15 +7,15 @@ from ultralytics import YOLO
 # ─── CONFIG ───────────────────────────────────────────────────
 ESP32_IP      = "10.229.235.220" 
 UDP_PORT      = 4210
-ROBOT_PORT    = "COM7" 
+ROBOT_PORT    = "COM5" 
 ROBOT_BAUD    = 115200
 MODEL_PATH    = "yolov8n.pt"
 BALL_CLASS    = [32] 
 CONF_THRESH   = 0.50
 
 # توقيتات الدورة
-WALK_DURATION = 5.0  # مدة المشي
-IDLE_DURATION = 1.0  # مدة الثبات قبل الفحص التالي
+WALK_DURATION = 4.0  # مدة المشي
+IDLE_DURATION = 0.5  # مدة الثبات قبل الفحص التالي
 # ──────────────────────────────────────────────────────────────
 
 model = YOLO(MODEL_PATH)
