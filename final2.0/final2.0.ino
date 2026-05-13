@@ -26,6 +26,13 @@ Adafruit_PWMServoDriver pca = Adafruit_PWMServoDriver();
 #define SERVOMAX 600
 
 // ─────────────────────────────────────────────
+//  Ultrasonic Sensor Pins & Threshold
+// ─────────────────────────────────────────────
+#define TRIG_PIN             12
+#define ECHO_PIN              2
+#define OBSTACLE_DISTANCE_CM 20   
+
+// ─────────────────────────────────────────────
 //  Servo state
 // ─────────────────────────────────────────────
 int cur_LL2 = 105, cur_LL3 = 155, cur_LL5 = 85;
@@ -50,6 +57,17 @@ void moveTo(int channel, int &cur, int target, int spd = 8) {
   cur = target;
 }
 
+float getDistance() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000); 
+  if (duration == 0) return 999.0;                
+  return duration * 0.034 / 2.0;
+}
+
 // ══════════════════════════════════════════════
 //  Robot motions
 // ══════════════════════════════════════════════
@@ -67,16 +85,16 @@ void initial_position() {
 
 void kick_right() {
   Serial.println(">>kick right");
-
-  moveTo(CH_LL5, cur_LL5, 70, 6); 
-  moveTo(CH_RL5, cur_RL5, 75, 6); 
+  moveTo(CH_LL5, cur_LL5, 70, 6);
+  moveTo(CH_RL5, cur_RL5, 75, 6);
   delay(300);
-  moveTo(CH_RL3, cur_RL3, 50, 4); 
+  moveTo(CH_RL3, cur_RL3, 50, 4);
   delay(200);
-  moveTo(CH_RL3, cur_RL3, 20, 4); 
+  moveTo(CH_RL3, cur_RL3, 20, 4);
   delay(200);
   initial_position();
 }
+
 void stand_straight() {
   Serial.println(">> Stand");
   moveTo(CH_LL2, cur_LL2, 105);
@@ -150,22 +168,22 @@ void move_forward() {
 
 void turn_right() {
   Serial.println(">> Turn Right");
-  moveTo(CH_LL5, cur_LL5,95, 6); 
+  moveTo(CH_LL5, cur_LL5, 95, 6);
   delay(50);
-  moveTo(CH_RL3, cur_RL3,10, 4); 
+  moveTo(CH_RL3, cur_RL3, 10, 4);
   delay(100);
-  moveTo(CH_RL3, cur_RL3,30, 4); 
-  delay(100); 
+  moveTo(CH_RL3, cur_RL3, 30, 4);
+  delay(100);
   initial_position();
 }
 
 void turn_left() {
   Serial.println(">> Turn Left");
-  moveTo(CH_RL5, cur_RL5,95, 6); 
+  moveTo(CH_RL5, cur_RL5, 95, 6);
   delay(50);
-  moveTo(CH_LL3, cur_LL3,125, 5); 
+  moveTo(CH_LL3, cur_LL3, 125, 5);
   delay(100);
-  moveTo(CH_LL3, cur_LL3,150, 5); 
+  moveTo(CH_LL3, cur_LL3, 150, 5);
   initial_position();
 }
 
@@ -186,6 +204,22 @@ void printCommands() {
 
 void handleSerialCommand(String cmd) {
   cmd.trim();
+
+
+  if (cmd == "w" || cmd == "r" || cmd == "l" || cmd == "s") {
+    float dist = getDistance();
+    Serial.print("[ULTRASONIC] Distance: ");
+    Serial.print(dist);
+    Serial.println(" cm");
+
+    if (dist > 0 && dist < OBSTACLE_DISTANCE_CM) {
+      Serial.println("[OBSTACLE] Too close! Command blocked.");
+      Serial.println("OBSTACLE"); 
+      initial_position();
+      return; 
+    }
+  }
+
   if      (cmd == "i") initial_position();
   else if (cmd == "s") kick_right();
   else if (cmd == "b") move_backward();
@@ -221,6 +255,10 @@ void setup() {
   Serial.begin(115200);
   Serial.setDebugOutput(true);
   Serial.println();
+
+  // ── Ultrasonic pins ───────────────────────────
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
 
   // ── Camera init ──────────────────────────────
   camera_config_t config;
@@ -297,7 +335,7 @@ void setup() {
   Serial.print(WiFi.localIP());
   Serial.println("/stream");
 
-  // ── PCA9685 init (SDA=21, SCL=22) ────────────
+  // ── PCA9685 init (SDA=13, SCL=14) ────────────
   Wire.begin(13, 14);
   pca.begin();
   pca.setOscillatorFrequency(27000000);

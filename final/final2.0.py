@@ -8,7 +8,7 @@ from ultralytics import YOLO
 # Configuration
 # ============================================================
 MODEL_PATH = "yolov8s.pt"
-ROBOT_PORT = "COM5"
+ROBOT_PORT = "COM7"
 ROBOT_BAUD = 115200
 
 CONFIDENCE_THRESHOLD = 0.35
@@ -27,6 +27,8 @@ ROI_SCALE = 2.2
 MIN_CONTOUR_AREA = 800
 MIN_CIRCULARITY = 0.65
 MIN_FILL_RATIO = 0.65
+
+OBSTACLE_PAUSE_DURATION = 2.0
 
 # ============================================================
 # Serial Setup
@@ -48,19 +50,43 @@ last_time = 0
 last_seen = None
 last_seen_time = 0.0
 
+obstacle_detected = False
+obstacle_time = 0.0
+
 # ============================================================
 # Robot Command
 # ============================================================
 def send_command(cmd):
+    global obstacle_detected, obstacle_time, is_kicking, kick_start_time
+
     serial_map = {
         "WALK_FORWARD": b"w\n",
         "TURN_RIGHT":   b"r\n",
         "TURN_LEFT":    b"l\n",
         "KICK":         b"s\n",
     }
+
+    if obstacle_detected:
+        if time.time() - obstacle_time < OBSTACLE_PAUSE_DURATION:
+            print(f"[OBSTACLE] Waiting... Command '{cmd}' ignored.")
+            return
+        else:
+            obstacle_detected = False  
+
     print(f"[ROBOT] {cmd}")
     if robot_ser and cmd in serial_map:
         robot_ser.write(serial_map[cmd])
+        time.sleep(0.05)
+
+        if robot_ser.in_waiting:
+            try:
+                feedback = robot_ser.readline().decode('utf-8', errors='ignore').strip()
+                if feedback == "OBSTACLE":
+                    print("[OBSTACLE] Arduino reported obstacle! Pausing commands.")
+                    obstacle_detected = True
+                    obstacle_time = time.time()
+            except Exception as e:
+                print(f"[WARN] Serial read error: {e}")
 
 # ============================================================
 # Fallback Detection
@@ -167,6 +193,16 @@ while cap.isOpened():
     center_x = w // 2
     now = time.time()
 
+    if robot_ser and robot_ser.in_waiting:
+        try:
+            line = robot_ser.readline().decode('utf-8', errors='ignore').strip()
+            if line == "OBSTACLE":
+                print("[OBSTACLE] Spontaneous obstacle report from Arduino!")
+                obstacle_detected = True
+                obstacle_time = now
+        except Exception:
+            pass
+
     # ================= YOLO =================
     results = model.predict(
         frame,
@@ -221,6 +257,10 @@ while cap.isOpened():
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(frame, "BALL", (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+    if obstacle_detected and (now - obstacle_time < OBSTACLE_PAUSE_DURATION):
+        cv2.putText(frame, "!! OBSTACLE DETECTED !!", (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
     # ================= CONTROL =================
     if is_kicking:
