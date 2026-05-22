@@ -44,27 +44,6 @@ Camera → YOLOv8 → Python Decision System → Serial Communication → ESP32 
 
 ---
 
-## Project Structure
-
-Humanoid_Football_Kicking_Robot/
-│
-├── Arduino/
-│   └── esp32_robot.ino
-│
-├── Python/
-│   ├── ball_detection.py
-│   ├── voice_control.py
-│
-├── Dashboard/
-│   └── index.html
-│
-├── Simulink/
-│   └── robot_model.slx
-│
-└── README.md
-
----
-
 ## Robot States
 
 - IDLE: Waiting for commands
