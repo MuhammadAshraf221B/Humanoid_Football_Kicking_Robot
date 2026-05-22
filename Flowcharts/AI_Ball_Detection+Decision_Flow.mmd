@@ -1,0 +1,58 @@
+flowchart TD
+
+%% =========================
+%% Styles
+%% =========================
+classDef start fill:#1e293b,color:#fff,stroke:#0f172a,stroke-width:2px
+classDef detect fill:#0f766e,color:#fff,stroke:#134e4a,stroke-width:2px
+classDef decision fill:#f59e0b,color:#fff,stroke:#92400e,stroke-width:2px
+classDef action fill:#2563eb,color:#fff,stroke:#1e3a8a,stroke-width:2px
+classDef kick fill:#dc2626,color:#fff,stroke:#7f1d1d,stroke-width:2px
+classDef search fill:#7c3aed,color:#fff,stroke:#4c1d95,stroke-width:2px
+
+%% =========================
+%% Nodes
+%% =========================
+A([Start Camera]):::start
+B([YOLO Ball Detection]):::detect
+
+C{Ball Found?}:::decision
+
+D[Search For Ball]:::search
+
+E[Calculate Ball Position]:::detect
+
+F{Ball Centered?}:::decision
+
+G[Turn Left]:::action
+H[Turn Right]:::action
+
+I{Close Enough?}:::decision
+
+J[Walk Forward]:::action
+
+K[Kick Ball]:::kick
+
+%% =========================
+%% Flow
+%% =========================
+A --> B
+B --> C
+
+C -- No --> D
+C -- Yes --> E
+
+E --> F
+
+F -- Left --> G
+F -- Right --> H
+F -- Center --> I
+
+I -- No --> J
+I -- Yes --> K
+
+G --> B
+H --> B
+J --> B
+D --> B
+K --> B

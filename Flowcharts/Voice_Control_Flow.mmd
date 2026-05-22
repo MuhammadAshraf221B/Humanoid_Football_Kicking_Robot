@@ -1,0 +1,33 @@
+flowchart TD
+
+%% =========================
+%% Styles
+%% =========================
+classDef voice fill:#7c3aed,color:#fff,stroke:#4c1d95,stroke-width:2px
+classDef decision fill:#f59e0b,color:#fff,stroke:#92400e,stroke-width:2px
+classDef action fill:#2563eb,color:#fff,stroke:#1e3a8a,stroke-width:2px
+
+%% =========================
+%% Nodes
+%% =========================
+A([Microphone Input]):::voice
+
+B[Speech Recognition]:::voice
+
+C{Detected Command}:::decision
+
+D[Send h]:::action
+E[Send l]:::action
+F[Send r]:::action
+G[Send s]:::action
+
+%% =========================
+%% Flow
+%% =========================
+A --> B
+B --> C
+
+C -->|forward| D
+C -->|left| E
+C -->|right| F
+C -->|shoot| G

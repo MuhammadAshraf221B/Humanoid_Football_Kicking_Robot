@@ -1,0 +1,89 @@
+flowchart LR
+
+%% =========================
+%% Styles
+%% =========================
+classDef ai fill:#0f766e,color:#fff,stroke:#134e4a,stroke-width:2px
+classDef robot fill:#2563eb,color:#fff,stroke:#1e3a8a,stroke-width:2px
+classDef sensor fill:#7c3aed,color:#fff,stroke:#4c1d95,stroke-width:2px
+classDef danger fill:#dc2626,color:#fff,stroke:#7f1d1d,stroke-width:2px
+classDef action fill:#16a34a,color:#fff,stroke:#14532d,stroke-width:2px
+classDef decision fill:#f59e0b,color:#fff,stroke:#92400e,stroke-width:2px
+
+%% =========================
+%% AI SIDE
+%% =========================
+A([Camera Stream]):::ai
+B([YOLO Detection]):::ai
+C{Ball Found?}:::decision
+D[Search Mode]:::ai
+E[Ball Position Analysis]:::ai
+
+%% =========================
+%% Decisions
+%% =========================
+F{Ball Centered?}:::decision
+G[Turn Left]:::action
+H[Turn Right]:::action
+I[Walk Forward]:::action
+J[Kick Ball]:::danger
+
+%% =========================
+%% Serial
+%% =========================
+K([Serial Communication]):::robot
+
+%% =========================
+%% Robot Side
+%% =========================
+L([ESP32 Robot]):::robot
+M[Servo Motion Execution]:::robot
+
+%% =========================
+%% Sensors
+%% =========================
+N[Ultrasonic Sensor]:::sensor
+O{Obstacle?}:::decision
+
+P[Stop Movement]:::danger
+Q[Continue Motion]:::action
+
+%% =========================
+%% Voice Control
+%% =========================
+R([Voice Commands]):::sensor
+S[Speech Recognition]:::sensor
+
+%% =========================
+%% Flow
+%% =========================
+A --> B
+B --> C
+
+C -- No --> D
+C -- Yes --> E
+
+E --> F
+
+F -- Left --> G
+F -- Right --> H
+F -- Center --> I
+
+I --> K
+G --> K
+H --> K
+
+E --> J
+J --> K
+
+K --> L
+L --> M
+
+L --> N
+N --> O
+
+O -- Yes --> P
+O -- No --> Q
+
+R --> S
+S --> K

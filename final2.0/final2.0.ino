@@ -1,6 +1,7 @@
 #include "Arduino.h"
 #include "esp_camera.h"
 #include <WiFi.h>
+#include <WebServer.h>
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 
@@ -13,6 +14,30 @@
 const char *ssid     = "realme 8";
 const char *password = "88888888";
 
+// ─────────────────────────────────────────────
+//  Web Status Server (port 8080)
+// ─────────────────────────────────────────────
+WebServer statusServer(8080);
+
+// ─────────────────────────────────────────────
+//  State Machine
+// ─────────────────────────────────────────────
+enum RobotState { IDLE, WALKING, KICKING, SEARCHING };
+RobotState robotState = IDLE;
+bool ballDetected     = false;
+
+const char* stateToString(RobotState s) {
+  switch (s) {
+    case WALKING:   return "WALKING";
+    case KICKING:   return "KICKING";
+    case SEARCHING: return "SEARCHING";
+    default:        return "IDLE";
+  }
+}
+
+// ─────────────────────────────────────────────
+//  PCA9685
+// ─────────────────────────────────────────────
 Adafruit_PWMServoDriver pca = Adafruit_PWMServoDriver();
 
 #define CH_LL2 0
@@ -21,26 +46,35 @@ Adafruit_PWMServoDriver pca = Adafruit_PWMServoDriver();
 #define CH_RL2 3
 #define CH_RL3 4
 #define CH_RL5 5
+#define CH_LH1 6
+#define CH_RH1 7
 
 #define SERVOMIN 150
 #define SERVOMAX 600
 
 // ─────────────────────────────────────────────
-//  Ultrasonic Sensor Pins & Threshold
+//  Ultrasonic
 // ─────────────────────────────────────────────
 #define TRIG_PIN             12
 #define ECHO_PIN              2
-#define OBSTACLE_DISTANCE_CM 20   
+#define OBSTACLE_DISTANCE_CM 20
 
 // ─────────────────────────────────────────────
 //  Servo state
 // ─────────────────────────────────────────────
 int cur_LL2 = 105, cur_LL3 = 155, cur_LL5 = 85;
 int cur_RL2 = 82,  cur_RL3 = 25,  cur_RL5 = 85;
+int cur_LH1 = 120, cur_RH1 = 0;
 
+// ─────────────────────────────────────────────
+//  Forward declarations
+// ─────────────────────────────────────────────
 void startCameraServer();
 void setupLedFlash();
 
+// ══════════════════════════════════════════════
+//  Servo helpers
+// ══════════════════════════════════════════════
 int angleToPulse(int angle) {
   return map(angle, 0, 180, SERVOMIN, SERVOMAX);
 }
@@ -57,14 +91,17 @@ void moveTo(int channel, int &cur, int target, int spd = 8) {
   cur = target;
 }
 
+// ══════════════════════════════════════════════
+//  Ultrasonic
+// ══════════════════════════════════════════════
 float getDistance() {
   digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
   digitalWrite(TRIG_PIN, HIGH);
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
-  long duration = pulseIn(ECHO_PIN, HIGH, 30000); 
-  if (duration == 0) return 999.0;                
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000);
+  if (duration == 0) return 999.0;
   return duration * 0.034 / 2.0;
 }
 
@@ -73,26 +110,32 @@ float getDistance() {
 // ══════════════════════════════════════════════
 void initial_position() {
   Serial.println(">> Initial Position");
+  robotState = IDLE;
   cur_LL2 = 105; cur_LL3 = 155; cur_LL5 = 85;
   cur_RL2 = 82;  cur_RL3 = 25;  cur_RL5 = 85;
+  cur_LH1 = 120; cur_RH1 = 0;
   setServo(CH_LL2, 105);
   setServo(CH_LL3, 155);
   setServo(CH_LL5, 90);
   setServo(CH_RL2, 82);
   setServo(CH_RL3, 25);
   setServo(CH_RL5, 85);
+  setServo(CH_LH1, 120);
+  setServo(CH_RH1, 0);
 }
 
 void kick_right() {
-  Serial.println(">>kick right");
-  moveTo(CH_LL5, cur_LL5, 70, 6);
+  Serial.println(">> Kick Right");
+  robotState = KICKING;
+  moveTo(CH_LL5, cur_LL5, 78, 6);
   moveTo(CH_RL5, cur_RL5, 75, 6);
-  delay(300);
+  delay(1000);
+  moveTo(CH_LH1, cur_LH1, 100, 4);
   moveTo(CH_RL3, cur_RL3, 50, 4);
+  delay(300);
+  moveTo(CH_RL3, cur_RL3, 20, 5);
   delay(200);
-  moveTo(CH_RL3, cur_RL3, 20, 4);
-  delay(200);
-  initial_position();
+  initial_position(); 
 }
 
 void stand_straight() {
@@ -107,6 +150,7 @@ void stand_straight() {
 
 void move_backward() {
   Serial.println(">> Move Backward");
+  robotState = WALKING;
   moveTo(CH_LL5, cur_LL5, 95, 6);
   moveTo(CH_RL5, cur_RL5, 95, 6);
   delay(500);
@@ -141,6 +185,7 @@ void stand_up() {
 
 void move_forward() {
   Serial.println(">> Move Forward");
+  robotState = WALKING;
   moveTo(CH_LL5, cur_LL5, 95, 6);
   moveTo(CH_RL5, cur_RL5, 95, 6);
   delay(300);
@@ -168,6 +213,7 @@ void move_forward() {
 
 void turn_right() {
   Serial.println(">> Turn Right");
+  robotState = WALKING;
   moveTo(CH_LL5, cur_LL5, 95, 6);
   delay(50);
   moveTo(CH_RL3, cur_RL3, 10, 4);
@@ -179,12 +225,66 @@ void turn_right() {
 
 void turn_left() {
   Serial.println(">> Turn Left");
+  robotState = WALKING;
   moveTo(CH_RL5, cur_RL5, 95, 6);
   delay(50);
   moveTo(CH_LL3, cur_LL3, 125, 5);
   delay(100);
   moveTo(CH_LL3, cur_LL3, 150, 5);
   initial_position();
+}
+
+void move_forward_with_hand() {
+  Serial.println(">> Move Forward With Hand");
+  robotState = WALKING;
+  moveTo(CH_LL5, cur_LL5, 95, 6);
+  moveTo(CH_RL5, cur_RL5, 95, 6);
+  delay(300);
+  moveTo(CH_LL3, cur_LL3, 130, 6);
+  moveTo(CH_RH1, cur_RH1, 50, 6);
+  delay(200);
+  moveTo(CH_LL2, cur_LL2, 130, 6);
+  delay(200);
+  moveTo(CH_LL5, cur_LL5, 85, 6);
+  moveTo(CH_RL5, cur_RL5, 85, 6);
+  delay(300);
+  moveTo(CH_LL5, cur_LL5, 80, 6);
+  moveTo(CH_RL5, cur_RL5, 80, 6);
+  delay(300);
+  moveTo(CH_RL3, cur_RL3, 30, 6);
+  moveTo(CH_LH1, cur_LH1, 80, 6);
+  delay(200);
+  moveTo(CH_RL2, cur_RL2, 52, 6);
+  delay(200);
+  moveTo(CH_RL3, cur_RL3, 25, 6);
+  delay(200);
+  moveTo(CH_LL5, cur_LL5, 85, 6);
+  moveTo(CH_RL5, cur_RL5, 85, 6);
+  delay(300);
+  initial_position();
+}
+
+void move_hands() {
+  Serial.println(">> Move Hands");
+  moveTo(CH_RH1, cur_RH1, 80, 1);
+  // delay(6000);
+  // moveTo(CH_LH1, cur_LH1, 70, 6);
+  // delay(6000);
+  // initial_position();
+}
+
+// ══════════════════════════════════════════════
+//  HTTP /status handler
+// ══════════════════════════════════════════════
+void handleStatus() {
+  float dist = getDistance();
+  String json = "{";
+  json += "\"state\":\"" + String(stateToString(robotState)) + "\",";
+  json += "\"ball\":"    + String(ballDetected ? "true" : "false") + ",";
+  json += "\"distance\":" + String(dist, 1);
+  json += "}";
+  statusServer.sendHeader("Access-Control-Allow-Origin", "*");
+  statusServer.send(200, "application/json", json);
 }
 
 // ══════════════════════════════════════════════
@@ -199,24 +299,24 @@ void printCommands() {
   Serial.println("  w  -> Move Forward");
   Serial.println("  r  -> Turn Right");
   Serial.println("  l  -> Turn Left");
+  Serial.println("  h  -> Move Forward With Hand");
+  Serial.println("  p  -> Move Hands");
   Serial.println("  LL2/LL3/LL5/RL2/RL3/RL5 [angle]");
 }
 
 void handleSerialCommand(String cmd) {
   cmd.trim();
 
-
-  if (cmd == "w" || cmd == "r" || cmd == "l" || cmd == "s") {
+  if (cmd == "h" || cmd == "r" || cmd == "l" || cmd == "s") {
     float dist = getDistance();
     Serial.print("[ULTRASONIC] Distance: ");
     Serial.print(dist);
     Serial.println(" cm");
-
     if (dist > 0 && dist < OBSTACLE_DISTANCE_CM) {
       Serial.println("[OBSTACLE] Too close! Command blocked.");
-      Serial.println("OBSTACLE"); 
+      Serial.println("OBSTACLE");
       initial_position();
-      return; 
+      return;
     }
   }
 
@@ -227,6 +327,8 @@ void handleSerialCommand(String cmd) {
   else if (cmd == "w") move_forward();
   else if (cmd == "r") turn_right();
   else if (cmd == "l") turn_left();
+  else if (cmd == "h") move_forward_with_hand();
+  else if (cmd == "p") move_hands();
   else {
     int sp = cmd.indexOf(' ');
     if (sp != -1) {
@@ -256,11 +358,10 @@ void setup() {
   Serial.setDebugOutput(true);
   Serial.println();
 
-  // ── Ultrasonic pins ───────────────────────────
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
 
-  // ── Camera init ──────────────────────────────
+  // ── Camera ───────────────────────────────────
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer   = LEDC_TIMER_0;
@@ -328,14 +429,23 @@ void setup() {
     Serial.print(".");
   }
   Serial.println("\nWiFi connected");
+  Serial.print("IP: http://");
+  Serial.println(WiFi.localIP());
 
-  // ── Camera HTTP stream server ─────────────────
+  // ── Camera stream server ──────────────────────
   startCameraServer();
-  Serial.print("Stream ready at http://");
+  Serial.print("Stream: http://");
   Serial.print(WiFi.localIP());
   Serial.println("/stream");
 
-  // ── PCA9685 init (SDA=13, SCL=14) ────────────
+  // ── Status server ─────────────────────────────
+  statusServer.on("/status", handleStatus);
+  statusServer.begin();
+  Serial.print("Dashboard: http://");
+  Serial.print(WiFi.localIP());
+  Serial.println(":8080/status");
+
+  // ── PCA9685 init (SDA=13, SCL=14) ───────────
   Wire.begin(13, 14);
   pca.begin();
   pca.setOscillatorFrequency(27000000);
@@ -351,9 +461,12 @@ void setup() {
 //  loop
 // ══════════════════════════════════════════════
 void loop() {
+  statusServer.handleClient();   // <── handles WiFi dashboard requests
+
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
     handleSerialCommand(cmd);
   }
+
   delay(10);
 }

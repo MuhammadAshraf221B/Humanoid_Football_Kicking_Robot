@@ -1,0 +1,31 @@
+flowchart TD
+
+%% =========================
+%% Styles
+%% =========================
+classDef sensor fill:#0f766e,color:#fff,stroke:#134e4a,stroke-width:2px
+classDef decision fill:#f59e0b,color:#fff,stroke:#92400e,stroke-width:2px
+classDef danger fill:#dc2626,color:#fff,stroke:#7f1d1d,stroke-width:2px
+classDef safe fill:#16a34a,color:#fff,stroke:#14532d,stroke-width:2px
+
+%% =========================
+%% Nodes
+%% =========================
+A([Receive Movement Command]):::sensor
+
+B[Read Ultrasonic Distance]:::sensor
+
+C{Obstacle < 20cm ?}:::decision
+
+D[Block Motion]:::danger
+
+E[Execute Movement]:::safe
+
+%% =========================
+%% Flow
+%% =========================
+A --> B
+B --> C
+
+C -- Yes --> D
+C -- No --> E

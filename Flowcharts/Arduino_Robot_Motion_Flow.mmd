@@ -1,0 +1,44 @@
+flowchart TD
+
+%% =========================
+%% Styles
+%% =========================
+classDef serial fill:#1d4ed8,color:#fff,stroke:#1e3a8a,stroke-width:2px
+classDef decision fill:#f59e0b,color:#fff,stroke:#92400e,stroke-width:2px
+classDef motion fill:#059669,color:#fff,stroke:#064e3b,stroke-width:2px
+classDef servo fill:#7c3aed,color:#fff,stroke:#4c1d95,stroke-width:2px
+
+%% =========================
+%% Nodes
+%% =========================
+A([Receive Serial Command]):::serial
+
+B{Command Type}:::decision
+
+C[Move Forward]:::motion
+D[Turn Left]:::motion
+E[Turn Right]:::motion
+F[Kick]:::motion
+G[Move Backward]:::motion
+H[Move Hands]:::motion
+
+I[Move Servo Motors]:::servo
+
+%% =========================
+%% Flow
+%% =========================
+A --> B
+
+B -->|h| C
+B -->|l| D
+B -->|r| E
+B -->|s| F
+B -->|b| G
+B -->|p| H
+
+C --> I
+D --> I
+E --> I
+F --> I
+G --> I
+H --> I
